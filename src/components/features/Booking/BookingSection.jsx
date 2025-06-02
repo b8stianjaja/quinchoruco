@@ -1,36 +1,62 @@
-// src/components/features/Booking/BookingSection.jsx
-import React, { useState, useCallback } from 'react';
+// QER/src/components/features/Booking/BookingSection.jsx
+import React, { useState, useCallback, useEffect } from 'react';
 import Calendar from './Calendar';
 import BookingForm from './BookingForm';
 
 function BookingSection() {
   const [selectedDate, setSelectedDate] = useState(null);
   const [slotAvailability, setSlotAvailability] = useState({ 
-    isDaySlotAvailable: true, // Valor inicial optimista
-    isNightSlotAvailable: true // Valor inicial optimista
+    isDaySlotAvailable: true,
+    isNightSlotAvailable: true 
   });
-  const [selectedSlot, setSelectedSlot] = useState(null); // 'day', 'night', or null
+  const [selectedSlot, setSelectedSlot] = useState(null);
+  const [bookingProcessStatus, setBookingProcessStatus] = useState({ message: '', type: '' });
 
-  // Esta función es llamada por Calendar.jsx cuando se selecciona una fecha.
-  // 'availability' es un objeto como { isDaySlotAvailable: boolean, isNightSlotAvailable: boolean }
+  // Ya no necesitamos 'resetSelectionAfterSuccess', lo manejamos en el setTimeout
+
+  const clearMainStatusMessage = useCallback(() => {
+    // Esta función es para que BookingForm pueda limpiar el mensaje si cambia la fecha/slot
+    console.log("[BookingSection] clearMainStatusMessage llamado");
+    setBookingProcessStatus({ message: '', type: '' });
+  }, []);
+
   const handleDateSelection = useCallback((date, availability) => {
     setSelectedDate(date);
     setSlotAvailability(availability || { isDaySlotAvailable: true, isNightSlotAvailable: true });
-    setSelectedSlot(null); // Importante: Resetea la franja al cambiar de día
+    setSelectedSlot(null);
+    setBookingProcessStatus({ message: '', type: '' }); // Limpiar mensaje al seleccionar nueva fecha
   }, []);
 
   const handleSlotSelection = useCallback((slot) => {
     setSelectedSlot(slot);
+    setBookingProcessStatus({ message: '', type: '' }); // Limpiar mensaje al seleccionar nuevo slot
   }, []);
 
-  const handleBookingSuccess = useCallback(() => {
-    setSelectedDate(null);
-    setSelectedSlot(null);
-    setSlotAvailability({ isDaySlotAvailable: true, isNightSlotAvailable: true });
-    // Aquí podríamos querer forzar una actualización de los datos del calendario
-    // si el hook useCalendar no lo hace automáticamente al cambiar selectedDate a null.
-    // Por ahora, la lógica de useCalendar se actualiza al cambiar de mes.
+  const handleBookingAttemptSuccess = useCallback((successMessage) => {
+    console.log("[BookingSection] handleBookingAttemptSuccess llamado con mensaje:", successMessage);
+    setBookingProcessStatus({ message: successMessage, type: 'success' });
+    
+    // Limpiamos la selección de fecha/franja DESPUÉS de un delay
+    // para dar tiempo a que el mensaje de éxito se muestre en la UI.
+    // BookingForm limpiará sus propios campos de texto.
+    setTimeout(() => {
+      console.log("[BookingSection] setTimeout en success: Limpiando selectedDate y selectedSlot");
+      setSelectedDate(null); 
+      setSelectedSlot(null); 
+      // Opcional: Limpiar también el mensaje de éxito después de que se haya mostrado un tiempo
+      // Si quieres que el mensaje desaparezca después de este delay, descomenta la siguiente línea:
+      // setBookingProcessStatus({ message: '', type: '' }); 
+    }, 5000); // Mostrar mensaje por 5 segundos (o el tiempo que desees)
   }, []);
+
+  const handleBookingAttemptError = useCallback((errorMessage) => {
+    console.log("[BookingSection] handleBookingAttemptError llamado con mensaje:", errorMessage);
+    setBookingProcessStatus({ message: errorMessage, type: 'error' });
+    // No limpiamos fecha/franja para que el usuario pueda corregir y reintentar.
+  }, []);
+  
+  // Log para depurar el estado del mensaje ANTES del return
+  console.log("[BookingSection] Renderizando. bookingProcessStatus:", bookingProcessStatus);
 
   return (
     <section id="booking" className="py-16 md:py-24 bg-white">
@@ -43,6 +69,26 @@ function BookingSection() {
             Consulta nuestra disponibilidad y elige la fecha y franja horaria perfecta para tu evento en Quincho El Ruco.
           </p>
         </div>
+
+        {/* --- RENDERIZADO DEL MENSAJE --- */}
+        {bookingProcessStatus.message && (
+          <div className="max-w-5xl mx-auto mb-6 text-center">
+            <p 
+              role="alert" 
+              aria-live="assertive" 
+              style={{ /* ... tus estilos en línea para visibilidad ... */ 
+                padding: '1rem', borderRadius: '0.375rem', fontSize: '0.875rem',
+                border: '1px solid',
+                backgroundColor: bookingProcessStatus.type === 'success' ? '#DEF7E0' : bookingProcessStatus.type === 'error' ? '#FED7D7' : '#FEF3C7',
+                color: bookingProcessStatus.type === 'success' ? '#2F855A' :  bookingProcessStatus.type === 'error' ? '#C53030' : '#92400E',
+                borderColor: bookingProcessStatus.type === 'success' ? '#9AE6B4' : bookingProcessStatus.type === 'error' ? '#FEB2B2' : '#FEEBC8',
+              }}
+            >
+              {bookingProcessStatus.message}
+            </p>
+          </div>
+        )}
+        {/* --- FIN DEL RENDERIZADO DEL MENSAJE --- */}
 
         <div className="max-w-5xl mx-auto bg-gray-50 p-6 sm:p-8 md:p-10 rounded-xl shadow-2xl grid md:grid-cols-2 gap-8 md:gap-12 items-start">
           <div className="w-full">
@@ -61,10 +107,14 @@ function BookingSection() {
             </h3>
             <BookingForm
               selectedDate={selectedDate}
-              onBookingSuccess={handleBookingSuccess}
+              onBookingAttemptSuccess={handleBookingAttemptSuccess}
+              onBookingAttemptError={handleBookingAttemptError}
               slotAvailability={slotAvailability}
               selectedSlot={selectedSlot}
-              onSlotSelect={handleSlotSelection} // Pasa la función para seleccionar franja
+              onSlotSelect={handleSlotSelection}
+              // Pasamos la función para que BookingForm pueda limpiar el mensaje principal
+              // si el usuario cambia la fecha/slot ANTES de enviar el formulario.
+              clearBookingProcessStatus={clearMainStatusMessage} 
             />
           </div>
         </div>
@@ -72,5 +122,4 @@ function BookingSection() {
     </section>
   );
 }
-
-export default BookingSection;
+export default BookingSection;  
